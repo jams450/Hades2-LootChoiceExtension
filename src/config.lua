@@ -2,6 +2,7 @@ return {
 	version = 0;
 	enabled = true;
 	choices = 4;
+	random_choices = false;
 
 	vow_of_forsaking = "Random";
 

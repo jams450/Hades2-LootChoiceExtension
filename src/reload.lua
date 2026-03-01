@@ -25,6 +25,8 @@ local is_god_boon = {
 }
 
 function isBoonSubjectExcluded(subjectName)
+	print("SubjectName: " .. tostring(subjectName))
+
 	if subjectName == nil or subjectName:sub(1,3) == "NPC" then return true end
 	if is_god_boon[subjectName] then
 		return not config.GodUpgrade_enabled
@@ -35,11 +37,11 @@ end
 
 -- TODO: Change these to selectively give the configured choices or vanilla depending on excludedSubjects?
 function GetTotalLootChoices_override()
-	return config.choices
+	return getCurrentLootChoices()
 end
 
 function CalcNumLootChoices_override(isGodLoot, treatAsGodLootByShops)
-	local numChoices = config.choices -- GetNumMetaUpgrades function doesn't exist anymore
+	local numChoices = getCurrentLootChoices() -- GetNumMetaUpgrades function doesn't exist anymore
 	if (isGodLoot or treatAsGodLootByShops) and HasHeroTraitValue("RestrictBoonChoices") then
 			numChoices = numChoices - 1
 	end
@@ -60,41 +62,67 @@ function CreateUpgradeChoiceButton_wrap(base, screen, lootData, itemIndex, itemD
 		return base(screen, lootData, itemIndex, itemData)
 	end
 
-	screen.MaxChoices = config.choices
-	local scaleFactor = 3.0 / config.choices
-	screen.PurchaseButton.Name = boonSlotObtacleNames[config.choices]
+	local numChoices = getCurrentLootChoices()
+	screen.MaxChoices = numChoices
+	local scaleFactor = 3.0 / numChoices
+	screen.PurchaseButton.Name = boonSlotObtacleNames[numChoices]
 
 	-- Set up static data that determines how the layout is built
-	resizeBoonScreenData(screen, scaleFactor)
+	resizeBoonScreenData(screen, scaleFactor, numChoices)
 	
 	local button = base(screen, lootData, itemIndex, itemData)
 
 	-- Resize and move components after they've been drawn to screen
-	resizeBoonScreenComponents(screen, itemIndex, scaleFactor)
+	resizeBoonScreenComponents(screen, itemIndex, scaleFactor, numChoices)
 
 	return button
 end
 
-function resizeBoonScreenData(screen, scaleFactor)
+function logScreenProperties(screen)
+	print("=== SCREEN PROPERTIES ===")
+	for key, value in pairs(screen) do
+		if type(value) ~= "table" then
+			print(key .. ": " .. tostring(value))
+		else
+			print(key .. " (table):")
+			for subKey, subValue in pairs(value) do
+				if type(subValue) ~= "table" and type(subValue) ~= "function" then
+					print("  " .. subKey .. ": " .. tostring(subValue))
+				elseif type(subValue) == "table" then
+					print("  " .. subKey .. " (table)")
+				end
+			end
+		end
+	end
+	print("========================")
+end
+
+function resizeBoonScreenData(screen, scaleFactor, numChoices)
+
+	local sizeFont = numChoices > 3 and  18 or 20
+
 	screen.ButtonSpacingY = rom.game.ScreenData.UpgradeChoice.ButtonSpacingY * scaleFactor
 	--screen.LineHeight = rom.game.ScreenData.UpgradeChoice.LineHeight * scaleFactor
 
 	screen.StatLineLeft.LineSpacingBottom = rom.game.ScreenData.UpgradeChoice.StatLineLeft.LineSpacingBottom * scaleFactor
 	screen.StatLineRight.LineSpacingBottom = rom.game.ScreenData.UpgradeChoice.StatLineLeft.LineSpacingBottom * scaleFactor
 
+	screen.StatLineLeft.FontSize = sizeFont * scaleFactor ^ (1/3)
+	screen.StatLineRight.FontSize = sizeFont * scaleFactor ^ (1/3)
+
 	-- Scaling FontSize by cube root looks better, tested and suggested by dwbl.
 	screen.RarityText.OffsetY = rom.game.ScreenData.UpgradeChoice.RarityText.OffsetY * scaleFactor
-	screen.RarityText.FontSize = rom.game.ScreenData.UpgradeChoice.RarityText.FontSize * scaleFactor ^ (1/3)
+	screen.RarityText.FontSize = sizeFont * scaleFactor ^ (1/3)
 	screen.TitleText.OffsetY = rom.game.ScreenData.UpgradeChoice.TitleText.OffsetY * scaleFactor
-	screen.TitleText.FontSize = rom.game.ScreenData.UpgradeChoice.TitleText.FontSize * scaleFactor ^ (1/3)
+	screen.TitleText.FontSize = sizeFont * scaleFactor ^ (1/3)
 	screen.DescriptionText.OffsetY = rom.game.ScreenData.UpgradeChoice.DescriptionText.OffsetY * scaleFactor * scaleFactor
-	screen.DescriptionText.FontSize = 20 * scaleFactor ^ (1/3)
+	screen.DescriptionText.FontSize = sizeFont * scaleFactor ^ (1/3)
 	-- screen.DescriptionText.TextSymbolScale = rom.game.ScreenData.UpgradeChoice.DescriptionText.TextSymbolScale * scaleFactor
 
 	screen.IconOffsetY = rom.game.ScreenData.UpgradeChoice.IconOffsetY * scaleFactor
 	screen.ExchangeIconOffsetY = rom.game.ScreenData.UpgradeChoice.ExchangeIconOffsetY * scaleFactor
-	screen.ExchangeIconOffsetX = rom.game.ScreenData.UpgradeChoice.ExchangeIconOffsetX + 5  * (config.choices - 3)
-	screen.ExchangeSymbol.OffsetX = rom.game.ScreenData.UpgradeChoice.ExchangeSymbol.OffsetX + 5  * (config.choices - 3)
+	screen.ExchangeIconOffsetX = rom.game.ScreenData.UpgradeChoice.ExchangeIconOffsetX + 5  * (numChoices - 3)
+	screen.ExchangeSymbol.OffsetX = rom.game.ScreenData.UpgradeChoice.ExchangeSymbol.OffsetX + 5  * (numChoices - 3)
 	screen.BonusIconOffsetY = rom.game.ScreenData.UpgradeChoice.BonusIconOffsetY * scaleFactor
 	screen.QuestIconOffsetY = rom.game.ScreenData.UpgradeChoice.QuestIconOffsetY * scaleFactor
 	screen.PoseidonDuoIconOffsetY = rom.game.ScreenData.UpgradeChoice.PoseidonDuoIconOffsetY * scaleFactor
@@ -102,30 +130,34 @@ function resizeBoonScreenData(screen, scaleFactor)
 	screen.ElementIcon.YShift = rom.game.ScreenData.UpgradeChoice.ElementIcon.YShift * scaleFactor
 
 	screen.ExchangeSymbol.OffsetY = rom.game.ScreenData.UpgradeChoice.ExchangeSymbol.OffsetY * scaleFactor
+	
+	-- Log all screen properties for debugging
+	--logScreenProperties(screen)
 end
 
 -- Some components are not created via ScreenData config, so we rescale and tweak them after their creation
-function resizeBoonScreenComponents(screen, itemIndex, scaleFactor)
+function resizeBoonScreenComponents(screen, itemIndex, scaleFactor, numChoices)
 	local components = screen.Components
 	local purchaseButtonKey = "PurchaseButton"..itemIndex
 
 	SetScaleY({ Id = components[purchaseButtonKey].Id, Fraction = scaleFactor, Duration = 0 })
 	-- SetScaleX({ Id = components[purchaseButtonKey].Id, Fraction = 1 / scaleFactor, Duration = 0 })
 	components[purchaseButtonKey].ScaleFactor = scaleFactor
-
+	
 	SetScaleY({ Id = components[purchaseButtonKey.."Highlight"].Id, Fraction = scaleFactor, Duration = 0 })
+	-- Move highlight up by 10% to match button
 
 	-- The icons stop overlapping the boon properly when scaled down, so shift them a bit right to look normal again
 	SetScaleX({ Id = components[purchaseButtonKey.."Icon"].Id, Fraction = scaleFactor, Duration = 0 })
 	SetScaleY({ Id = components[purchaseButtonKey.."Icon"].Id, Fraction = scaleFactor, Duration = 0 })
-	if (config.choices ~= 3) then -- Move of Distance = 0 puts component to top left corner of screen
-		Move({ Id = components[purchaseButtonKey.."Icon"].Id, Angle = 360, Distance = 5  * (config.choices - 3) })
+	if (numChoices ~= 3) then -- Move of Distance = 0 puts component to top left corner of screen
+		Move({ Id = components[purchaseButtonKey.."Icon"].Id, Angle = 360, Distance = 5  * (numChoices - 3) })
 	end
 
 	SetScaleX({ Id = components[purchaseButtonKey.."Frame"].Id, Fraction = scaleFactor, Duration = 0 })
 	SetScaleY({ Id = components[purchaseButtonKey.."Frame"].Id, Fraction = scaleFactor, Duration = 0 })
-	if (config.choices ~= 3) then -- Move of Distance = 0 puts component to top left corner of screen
-		Move({ Id = components[purchaseButtonKey.."Frame"].Id, Angle = 360, Distance = 5  * (config.choices - 3) })
+	if (numChoices ~= 3) then -- Move of Distance = 0 puts component to top left corner of screen
+		Move({ Id = components[purchaseButtonKey.."Frame"].Id, Angle = 360, Distance = 5  * (numChoices - 3) })
 	end
 
 	-- TODO: shift this down left ~5 pixels once vanilla UI is referenced
@@ -148,10 +180,10 @@ function resizeBoonScreenComponents(screen, itemIndex, scaleFactor)
 		SetScaleY({ Id = components[purchaseButtonKey.."ExchangeIconFrame"].Id, Fraction = scaleFactor, Duration = 0 })
 
 
-		if (config.choices ~= 3) then -- Move of Distance = 0 puts component to top left corner of screen
-			Move({ Id = components[purchaseButtonKey.."ExchangeSymbol"].Id, Angle = 360, Distance = 5  * (config.choices - 3) })
-			Move({ Id = components[purchaseButtonKey.."ExchangeIcon"].Id, Angle = 360, Distance = 5  * (config.choices - 3) })
-			Move({ Id = components[purchaseButtonKey.."ExchangeIconFrame"].Id, Angle = 360, Distance = 5  * (config.choices - 3) })
+		if (numChoices ~= 3) then -- Move of Distance = 0 puts component to top left corner of screen
+			Move({ Id = components[purchaseButtonKey.."ExchangeSymbol"].Id, Angle = 360, Distance = 5  * (numChoices - 3) })
+			Move({ Id = components[purchaseButtonKey.."ExchangeIcon"].Id, Angle = 360, Distance = 5  * (numChoices - 3) })
+			Move({ Id = components[purchaseButtonKey.."ExchangeIconFrame"].Id, Angle = 360, Distance = 5  * (numChoices - 3) })
 		end
 	end
 
@@ -207,8 +239,9 @@ function DestroyBoonLootButtons_wrap( base, screen, lootData )
 end
 
 function HandleLootPickup_wrap(base, currentRun, loot, args )
-	if (loot_choices_at_room_load ~= config.choices) then
-		print("Loot choice at room load: " .. tostring(loot_choices_at_room_load) .. ", loot choices configured: " .. config.choices .. " - Rerolling rewards")
+	local currentChoices = getCurrentLootChoices()
+	if (loot_choices_at_room_load ~= currentChoices) then
+		print("Loot choice at room load: " .. tostring(loot_choices_at_room_load) .. ", loot choices configured: " .. currentChoices .. " - Rerolling rewards")
 		SetTraitsOnLoot(loot, args)
 	end
 	base(currentRun, loot, args)
@@ -223,7 +256,7 @@ function HandleUpgradeChoiceSelection_wrap(base, screen, button, args )
 		base(screen, button, args)
 	elseif config.vow_of_forsaking == VowOptions.ALL then
 		local pre = game.DeepCopyTable(game.MetaUpgradeData.BanUnpickedBoonsShrineUpgrade.ChangeValue)
-		game.MetaUpgradeData.BanUnpickedBoonsShrineUpgrade.ChangeValue = config.choices - 1
+		game.MetaUpgradeData.BanUnpickedBoonsShrineUpgrade.ChangeValue = getCurrentLootChoices() - 1
 
 		base(screen, button, args)
 

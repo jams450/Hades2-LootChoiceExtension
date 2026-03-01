@@ -43,6 +43,23 @@ CHOICE_LIMIT = {
 	MAX = 6,
 }
 
+-- Generates a new loot choice count for the current room
+-- If random_choices is enabled, returns a random value between MIN and MAX
+-- Otherwise, returns the configured choices value
+function getLootChoiceCount()
+	if config.random_choices then
+		return math.random(CHOICE_LIMIT.MIN, CHOICE_LIMIT.MAX)
+	else
+		return config.choices
+	end
+end
+
+-- Returns the current loot choice count for this room
+-- This value is set once when entering a room and remains constant throughout
+function getCurrentLootChoices()
+	return loot_choices_at_room_load
+end
+
 ---@enum VowOptions
 VowOptions = {
 	RANDOM = "Random",
@@ -55,14 +72,17 @@ local function on_ready()
 
 	rom.gui.add_imgui(function()
 		if rom.ImGui.Begin("Configure") then
-			rom.ImGui.Text("Number of reward choices:")
+		rom.ImGui.Text("Number of reward choices:")
 
-			local value, clicked = rom.ImGui.SliderInt("", config.choices, CHOICE_LIMIT.MIN, CHOICE_LIMIT.MAX)
-			if clicked then
-				config.choices = value
-			end
+		local value, clicked = rom.ImGui.SliderInt("", config.choices, CHOICE_LIMIT.MIN, CHOICE_LIMIT.MAX)
+		if clicked then
+			config.choices = value
+		end
 
-			rom.ImGui.Text("Reward types enabled:")
+		local random_value, random_clicked = rom.ImGui.Checkbox("Random choices (3-6)", config.random_choices)
+		if random_clicked then config.random_choices = random_value end
+
+		rom.ImGui.Text("Reward types enabled:")
 
 			local value, clicked = rom.ImGui.Checkbox("Hammers", config.WeaponUpgrade_enabled)
 			if clicked then config.WeaponUpgrade_enabled = value end

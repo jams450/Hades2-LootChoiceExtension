@@ -71,5 +71,5 @@ modutil.mod.Path.Context.Wrap("TryUpgradeBoon", TryUpgradeBoon_context)
 -- Update the number of loot choices to use on each room load.  If changed mid-room, we need to reroll the rewards on the loot on pickup
 -- (since it was already rolled with the previous config on room load)
 OnAnyLoad{ function()
-	loot_choices_at_room_load = config.choices
+	loot_choices_at_room_load = getLootChoiceCount()
 end}
